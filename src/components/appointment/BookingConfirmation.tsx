@@ -1,30 +1,33 @@
 import { useState } from 'react';
 import type { PublicAppointmentConfirmation } from '@/types/scheduling';
 import { formatISTTimeDisplay, formatISTDateDisplay } from '@/lib/timezone';
-import { 
-  CheckCircle, 
-  Copy, 
-  Check, 
-  Printer, 
-  House, 
-  CalendarPlus, 
-  MapPin, 
-  Clock, 
-  User, 
+import {
+  CheckCircle,
+  Copy,
+  Check,
+  Printer,
+  House,
+  CalendarPlus,
+  MapPin,
+  Clock,
+  User,
   FirstAid,
   Info,
-  EnvelopeSimple 
+  EnvelopeSimple,
+  MagnifyingGlass
 } from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
 
 interface BookingConfirmationProps {
   confirmation: PublicAppointmentConfirmation;
   onBookAnother: () => void;
+  onManageAppointment?: (reference: string) => void;
 }
 
 export function BookingConfirmation({
   confirmation,
-  onBookAnother
+  onBookAnother,
+  onManageAppointment
 }: BookingConfirmationProps) {
   const [copied, setCopied] = useState(false);
 
@@ -161,10 +164,21 @@ export function BookingConfirmation({
         </button>
 
         <div className="flex flex-wrap items-center gap-3">
+          {onManageAppointment && (
+            <button
+              type="button"
+              onClick={() => onManageAppointment(confirmation.appointment_id)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded border border-[#1A635E] text-[#1A635E] hover:bg-[#EDF5F4] transition-colors min-h-[44px] cursor-pointer"
+            >
+              <MagnifyingGlass size={16} />
+              <span>Manage or Reschedule</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={onBookAnother}
-            className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded border border-[#1A635E] text-[#1A635E] hover:bg-[#EDF5F4] transition-colors min-h-[44px]"
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded border border-[#E5E2D8] text-[#222528] hover:bg-[#F4F2EC] transition-colors min-h-[44px] cursor-pointer"
           >
             <CalendarPlus size={16} />
             <span>Book Another Appointment</span>

@@ -12,11 +12,11 @@ import type {
   CalculatedSlot,
   PublicAppointmentConfirmation
 } from '@/types/scheduling';
-import type { 
-  AppointmentStep, 
-  ActiveSlotHoldState, 
-  PatientFormState, 
-  BookingFlowState 
+import type {
+  AppointmentStep,
+  ActiveSlotHoldState,
+  PatientFormState,
+  BookingFlowState
 } from '@/components/appointment/types';
 import { StepProgressIndicator } from '@/components/appointment/StepProgressIndicator';
 import { BookingSummarySidebar } from '@/components/appointment/BookingSummarySidebar';
@@ -34,6 +34,7 @@ import { CalendarCheck, MagnifyingGlass } from '@phosphor-icons/react';
 export function AppointmentPage() {
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'book' | 'lookup'>('book');
+  const [lookupPrefill, setLookupPrefill] = useState('');
 
   const [flow, setFlow] = useState<BookingFlowState>({
     currentStep: 'department',
@@ -87,6 +88,11 @@ export function AppointmentPage() {
         })
         .catch(() => {});
     }
+
+    const refParam = searchParams.get('ref');
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'lookup') setActiveTab('lookup');
+    if (refParam) setLookupPrefill(refParam);
   }, [searchParams]);
 
   const canNavigateToStep = useCallback((targetStep: AppointmentStep): boolean => {
@@ -338,11 +344,18 @@ export function AppointmentPage() {
       </div>
 
       {activeTab === 'lookup' ? (
-        <AppointmentLookupView onBackToBooking={() => setActiveTab('book')} />
+        <AppointmentLookupView
+          onBackToBooking={() => setActiveTab('book')}
+          initialAppointmentId={lookupPrefill}
+        />
       ) : flow.currentStep === 'confirmation' && flow.confirmedAppointment ? (
         <BookingConfirmation
           confirmation={flow.confirmedAppointment}
           onBookAnother={handleBookAnother}
+          onManageAppointment={(ref) => {
+            setLookupPrefill(ref);
+            setActiveTab('lookup');
+          }}
         />
       ) : (
         <div className="space-y-6">

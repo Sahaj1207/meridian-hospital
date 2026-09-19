@@ -3,14 +3,14 @@ import type { PublicAppointmentConfirmation } from '@/types/scheduling';
 import { appointmentService } from '@/services/appointmentService';
 import { formatISTTimeDisplay, formatISTDateDisplay } from '@/lib/timezone';
 import { AppointmentRescheduleFlow } from './AppointmentRescheduleFlow';
-import { 
-  MagnifyingGlass, 
-  Key, 
-  WarningCircle, 
-  CheckCircle, 
-  Clock, 
-  MapPin, 
-  User, 
+import {
+  MagnifyingGlass,
+  Key,
+  WarningCircle,
+  CheckCircle,
+  Clock,
+  MapPin,
+  User,
   FirstAid,
   ShieldCheck,
   CalendarBlank,
@@ -20,12 +20,16 @@ import {
 
 interface AppointmentLookupViewProps {
   onBackToBooking: () => void;
+  initialAppointmentId?: string;
 }
 
 type LookupMode = 'lookup' | 'details' | 'confirm_cancel' | 'rescheduling';
 
-export function AppointmentLookupView({ onBackToBooking }: AppointmentLookupViewProps) {
-  const [appointmentId, setAppointmentId] = useState('');
+export function AppointmentLookupView({
+  onBackToBooking,
+  initialAppointmentId = ''
+}: AppointmentLookupViewProps) {
+  const [appointmentId, setAppointmentId] = useState(initialAppointmentId);
   const [confirmationToken, setConfirmationToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

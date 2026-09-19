@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { hospitalContent } from '@/data/hospitalContent';
-import { 
-  Phone, 
-  MapPin, 
-  List, 
-  X, 
-  CalendarCheck, 
+import {
+  Phone,
+  MapPin,
+  List,
+  X,
+  CalendarCheck,
   FirstAid,
   House
 } from '@phosphor-icons/react';
@@ -17,6 +17,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  { label: 'Find Care', path: '/find-care' },
   { label: 'Departments', path: '/departments' },
   { label: 'Specialists', path: '/specialists' },
   { label: 'Patients', path: '/patients' },
@@ -72,8 +73,8 @@ export function Header() {
             <span className="inline-flex items-center gap-1.5 text-[#9E2A2B] font-medium">
               <FirstAid size={14} weight="fill" aria-hidden="true" />
               <span className="text-[12px] uppercase tracking-wider">Emergency 24/7:</span>
-              <a 
-                href={`tel:${hospitalContent.emergency.phone}`} 
+              <a
+                href={`tel:${hospitalContent.emergency.phone}`}
                 className="hover:underline font-semibold"
                 aria-label={`Call Emergency Care at ${hospitalContent.emergency.phone}`}
               >
@@ -87,8 +88,8 @@ export function Header() {
       {/* Primary header bar: 70px desktop height, single-line navigation */}
       <div className="max-w-7xl mx-auto h-[70px] px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
         {/* Brand identity */}
-        <Link 
-          to="/" 
+        <Link
+          to="/"
           className="flex flex-col focus-visible:ring-2 focus-visible:ring-[#1A635E] rounded-sm py-1"
           aria-label={`${hospitalContent.name} Home`}
         >
@@ -101,8 +102,8 @@ export function Header() {
         </Link>
 
         {/* Desktop semantic navigation */}
-        <nav 
-          className="hidden lg:flex items-center gap-7 text-[14.5px] font-medium text-[#3C4247]" 
+        <nav
+          className="hidden lg:flex items-center gap-7 text-[14.5px] font-medium text-[#3C4247]"
           aria-label="Primary Navigation"
         >
           <NavLink
@@ -166,8 +167,8 @@ export function Header() {
 
       {/* Accessible mobile drawer architecture */}
       {mobileMenuOpen && (
-        <div 
-          id="mobile-navigation-drawer" 
+        <div
+          id="mobile-navigation-drawer"
           className="lg:hidden fixed inset-0 top-[102px] z-50 bg-[#FAF9F6] border-t border-[#E5E2D8] flex flex-col justify-between p-6 overflow-y-auto"
           role="dialog"
           aria-modal="true"
@@ -194,20 +195,12 @@ export function Header() {
                   key={item.path}
                   to={item.path}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="text-lg font-medium text-[#222528] hover:text-[#1A635E] py-2 border-b border-[#F4F2EC] flex items-center justify-between"
+                  className="text-lg font-medium text-[#222528] hover:text-[#1A635E] py-2 border-b border-[#F4F2EC] flex items-center justify-between min-h-[44px]"
                 >
                   <span>{item.label}</span>
                   <span className="text-[#8E9499] text-sm">&rarr;</span>
                 </Link>
               ))}
-              <Link
-                to="/find-care"
-                onClick={() => setMobileMenuOpen(false)}
-                className="text-lg font-medium text-[#222528] hover:text-[#1A635E] py-2 border-b border-[#F4F2EC] flex items-center justify-between"
-              >
-                <span>Find Care</span>
-                <span className="text-[#8E9499] text-sm">&rarr;</span>
-              </Link>
               <Link
                 to="/international-patients"
                 onClick={() => setMobileMenuOpen(false)}
