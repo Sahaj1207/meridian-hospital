@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   ChartBar,
@@ -20,6 +20,7 @@ export function AdminLayout() {
   const [userRole, setUserRole] = useState<'public' | 'staff' | 'admin'>('public');
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [istTime, setIstTime] = useState<string>('');
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -41,8 +42,8 @@ export function AdminLayout() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch authenticated session & role
-  const refreshAuth = async () => {
+  // Fetch authenticated session & role with cleanup
+  const refreshAuth = useCallback(async () => {
     try {
       const user = await authService.getCurrentUser();
       if (user) {
@@ -57,11 +58,61 @@ export function AdminLayout() {
       setUserRole('public');
       setUserEmail(null);
     }
-  };
+  }, []);
 
+  // Initialize auth session and subscribe to auth state changes
   useEffect(() => {
-    refreshAuth();
-  }, [location.pathname]);
+    let isMounted = true;
+
+    async function initAuth() {
+      try {
+        const user = await authService.getCurrentUser();
+        if (!isMounted) return;
+        if (user) {
+          setUserRole(user.role);
+          setUserEmail(user.email || null);
+        } else {
+          setUserRole('public');
+          setUserEmail(null);
+        }
+      } catch {
+        if (isMounted) {
+          setUserRole('public');
+          setUserEmail(null);
+        }
+      } finally {
+        if (isMounted) {
+          setIsCheckingAuth(false);
+        }
+      }
+    }
+
+    initAuth();
+
+    const { unsubscribe } = authService.onAuthStateChange((_event, session) => {
+      if (!isMounted) return;
+      if (session?.user) {
+        setUserRole(session.user.role);
+        setUserEmail(session.user.email || null);
+      } else {
+        setUserRole('public');
+        setUserEmail(null);
+      }
+      setIsCheckingAuth(false);
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  // Refresh auth when navigating within admin portal
+  useEffect(() => {
+    if (!isCheckingAuth) {
+      refreshAuth();
+    }
+  }, [location.pathname, isCheckingAuth, refreshAuth]);
 
   const handleSignOut = async () => {
     await authService.signOut();
@@ -81,6 +132,28 @@ export function AdminLayout() {
   ];
 
   const isLoginPage = location.pathname === '/admin/login';
+
+  // Protect administrative routes from unauthenticated access
+  useEffect(() => {
+    if (!isCheckingAuth && userRole === 'public' && !isLoginPage) {
+      navigate('/admin/login', { replace: true, state: { from: location } });
+    }
+  }, [isCheckingAuth, userRole, isLoginPage, location, navigate]);
+
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-[#F4F2EC] flex items-center justify-center p-6 text-[#111315]">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="w-10 h-10 rounded bg-[#1A635E] text-[#FAF9F6] flex items-center justify-center font-serif text-xl font-bold animate-pulse">
+            M
+          </div>
+          <div className="text-xs font-mono tracking-wider uppercase text-[#555C63]">
+            Authenticating Clinical Session...
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F4F2EC] text-[#111315] font-sans flex flex-col">

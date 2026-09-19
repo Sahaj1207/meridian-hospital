@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Lock, Envelope, WarningCircle, CheckCircle } from '@phosphor-icons/react';
 import { authService } from '@/services/authService';
 import { isProductionEnvironment } from '@/services/supabaseClient';
@@ -11,6 +11,22 @@ export function AdminLoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const destinationPath = (location.state as { from?: { pathname?: string } })?.from?.pathname || '/admin';
+
+  // If already authenticated as staff or admin, proceed directly to destination
+  useEffect(() => {
+    let isMounted = true;
+    authService.getCurrentUser().then((user) => {
+      if (isMounted && user && (user.role === 'staff' || user.role === 'admin')) {
+        navigate(destinationPath, { replace: true });
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [navigate, destinationPath]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +48,7 @@ export function AdminLoginPage() {
 
       setSuccess(`Authenticated successfully as ${res.user?.role?.toUpperCase() || 'STAFF'}. Redirecting...`);
       setTimeout(() => {
-        navigate('/admin');
+        navigate(destinationPath, { replace: true });
       }, 500);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Authentication failed';
@@ -50,7 +66,7 @@ export function AdminLoginPage() {
       if (res.success) {
         setSuccess(`Demo session active as ${res.user?.role?.toUpperCase()}. Redirecting...`);
         setTimeout(() => {
-          navigate('/admin');
+          navigate(destinationPath, { replace: true });
         }, 500);
       } else {
         setError(res.error || 'Demo authentication failed.');

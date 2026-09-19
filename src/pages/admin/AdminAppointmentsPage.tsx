@@ -21,6 +21,7 @@ type QueueTab = 'all' | 'today' | 'upcoming' | 'pending' | 'confirmed' | 'comple
 export function AdminAppointmentsPage() {
   const [appointments, setAppointments] = useState<StaffAppointmentView[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Filters
@@ -125,65 +126,89 @@ export function AdminAppointmentsPage() {
 
   // Status mutation handlers
   const handleConfirm = async (ref: string) => {
+    if (actionLoadingId) return;
+    setActionLoadingId(ref);
     setActionMessage(null);
-    const res = await appointmentService.confirmAppointment(ref, true);
-    if (res.success) {
-      setActionMessage({ type: 'success', text: `Appointment ${ref} confirmed successfully.` });
-      fetchAppointments();
-      if (inspectingAppt?.appointment_id === ref) {
-        setInspectingAppt((prev) => prev ? { ...prev, status: 'confirmed' } : null);
+    try {
+      const res = await appointmentService.confirmAppointment(ref, true);
+      if (res.success) {
+        setActionMessage({ type: 'success', text: `Appointment ${ref} confirmed successfully.` });
+        await fetchAppointments();
+        if (inspectingAppt?.appointment_id === ref) {
+          setInspectingAppt((prev) => prev ? { ...prev, status: 'confirmed' } : null);
+        }
+      } else {
+        setActionMessage({ type: 'error', text: res.error || 'Failed to confirm appointment.' });
       }
-    } else {
-      setActionMessage({ type: 'error', text: res.error || 'Failed to confirm appointment.' });
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
   const handleComplete = async (ref: string) => {
+    if (actionLoadingId) return;
+    setActionLoadingId(ref);
     setActionMessage(null);
-    const res = await appointmentService.completeAppointment(ref, true);
-    if (res.success) {
-      setActionMessage({ type: 'success', text: `Appointment ${ref} marked as completed.` });
-      fetchAppointments();
-      if (inspectingAppt?.appointment_id === ref) {
-        setInspectingAppt((prev) => prev ? { ...prev, status: 'completed' } : null);
+    try {
+      const res = await appointmentService.completeAppointment(ref, true);
+      if (res.success) {
+        setActionMessage({ type: 'success', text: `Appointment ${ref} marked as completed.` });
+        await fetchAppointments();
+        if (inspectingAppt?.appointment_id === ref) {
+          setInspectingAppt((prev) => prev ? { ...prev, status: 'completed' } : null);
+        }
+      } else {
+        setActionMessage({ type: 'error', text: res.error || 'Failed to complete appointment.' });
       }
-    } else {
-      setActionMessage({ type: 'error', text: res.error || 'Failed to complete appointment.' });
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
   const handleNoShow = async (ref: string) => {
+    if (actionLoadingId) return;
+    setActionLoadingId(ref);
     setActionMessage(null);
-    const res = await appointmentService.recordNoShow(ref, true);
-    if (res.success) {
-      setActionMessage({ type: 'success', text: `Appointment ${ref} marked as no-show.` });
-      fetchAppointments();
-      if (inspectingAppt?.appointment_id === ref) {
-        setInspectingAppt((prev) => prev ? { ...prev, status: 'no_show' } : null);
+    try {
+      const res = await appointmentService.recordNoShow(ref, true);
+      if (res.success) {
+        setActionMessage({ type: 'success', text: `Appointment ${ref} marked as no-show.` });
+        await fetchAppointments();
+        if (inspectingAppt?.appointment_id === ref) {
+          setInspectingAppt((prev) => prev ? { ...prev, status: 'no_show' } : null);
+        }
+      } else {
+        setActionMessage({ type: 'error', text: res.error || 'Failed to mark no-show.' });
       }
-    } else {
-      setActionMessage({ type: 'error', text: res.error || 'Failed to mark no-show.' });
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
   const handleCancel = async (ref: string) => {
+    if (actionLoadingId) return;
     const reason = window.prompt('Please provide a clinical or operational cancellation reason:');
     if (!reason) return;
+    setActionLoadingId(ref);
     setActionMessage(null);
-    const res = await appointmentService.cancelAppointment({
-      appointment_id: ref,
-      cancellation_reason: reason
-    }, undefined, true);
+    try {
+      const res = await appointmentService.cancelAppointment({
+        appointment_id: ref,
+        cancellation_reason: reason
+      }, undefined, true);
 
-    if (typeof res === 'object' && res.success) {
-      setActionMessage({ type: 'success', text: `Appointment ${ref} cancelled successfully.` });
-      fetchAppointments();
-      if (inspectingAppt?.appointment_id === ref) {
-        setInspectingAppt((prev) => prev ? { ...prev, status: 'cancelled' } : null);
+      if (typeof res === 'object' && res.success) {
+        setActionMessage({ type: 'success', text: `Appointment ${ref} cancelled successfully.` });
+        await fetchAppointments();
+        if (inspectingAppt?.appointment_id === ref) {
+          setInspectingAppt((prev) => prev ? { ...prev, status: 'cancelled' } : null);
+        }
+      } else {
+        const errText = typeof res === 'object' ? res.error : 'Failed to cancel appointment.';
+        setActionMessage({ type: 'error', text: errText || 'Failed to cancel appointment.' });
       }
-    } else {
-      const errText = typeof res === 'object' ? res.error : 'Failed to cancel appointment.';
-      setActionMessage({ type: 'error', text: errText || 'Failed to cancel appointment.' });
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -522,13 +547,15 @@ export function AdminAppointmentsPage() {
                             <>
                               <button
                                 onClick={() => handleConfirm(appt.appointment_id)}
-                                className="px-2 py-1 bg-[#1A635E] hover:bg-[#14514D] text-[#FAF9F6] text-[11px] rounded transition-colors cursor-pointer font-medium"
+                                disabled={Boolean(actionLoadingId)}
+                                className="px-2 py-1 bg-[#1A635E] hover:bg-[#14514D] text-[#FAF9F6] text-[11px] rounded transition-colors cursor-pointer font-medium disabled:opacity-50"
                               >
-                                Confirm
+                                {actionLoadingId === appt.appointment_id ? 'Confirming...' : 'Confirm'}
                               </button>
                               <button
                                 onClick={() => handleCancel(appt.appointment_id)}
-                                className="px-2 py-1 bg-[#FCE8E6] hover:bg-[#F5C2C7] text-[#9E2A2B] text-[11px] rounded transition-colors cursor-pointer"
+                                disabled={Boolean(actionLoadingId)}
+                                className="px-2 py-1 bg-[#FCE8E6] hover:bg-[#F5C2C7] text-[#9E2A2B] text-[11px] rounded transition-colors cursor-pointer disabled:opacity-50"
                               >
                                 Cancel
                               </button>
@@ -539,25 +566,29 @@ export function AdminAppointmentsPage() {
                             <>
                               <button
                                 onClick={() => handleComplete(appt.appointment_id)}
-                                className="px-2 py-1 bg-[#153424] hover:bg-[#204E35] text-[#7EE787] text-[11px] rounded transition-colors cursor-pointer font-medium"
+                                disabled={Boolean(actionLoadingId)}
+                                className="px-2 py-1 bg-[#153424] hover:bg-[#204E35] text-[#7EE787] text-[11px] rounded transition-colors cursor-pointer font-medium disabled:opacity-50"
                               >
-                                Complete
+                                {actionLoadingId === appt.appointment_id ? 'Completing...' : 'Complete'}
                               </button>
                               <button
                                 onClick={() => openRescheduleModal(appt)}
-                                className="px-2 py-1 bg-[#F4F2EC] hover:bg-[#E5E2D8] border border-[#D9D5CA] text-[#222528] text-[11px] rounded transition-colors cursor-pointer"
+                                disabled={Boolean(actionLoadingId)}
+                                className="px-2 py-1 bg-[#F4F2EC] hover:bg-[#E5E2D8] border border-[#D9D5CA] text-[#222528] text-[11px] rounded transition-colors cursor-pointer disabled:opacity-50"
                               >
                                 Reschedule
                               </button>
                               <button
                                 onClick={() => handleNoShow(appt.appointment_id)}
-                                className="px-2 py-1 bg-[#F3E8FD] hover:bg-[#E9D5FF] text-[#6E2BB1] text-[11px] rounded transition-colors cursor-pointer"
+                                disabled={Boolean(actionLoadingId)}
+                                className="px-2 py-1 bg-[#F3E8FD] hover:bg-[#E9D5FF] text-[#6E2BB1] text-[11px] rounded transition-colors cursor-pointer disabled:opacity-50"
                               >
                                 No Show
                               </button>
                               <button
                                 onClick={() => handleCancel(appt.appointment_id)}
-                                className="px-2 py-1 bg-[#FAF9F6] hover:bg-[#FCE8E6] border border-[#E5E2D8] text-[#9E2A2B] text-[11px] rounded transition-colors cursor-pointer"
+                                disabled={Boolean(actionLoadingId)}
+                                className="px-2 py-1 bg-[#FAF9F6] hover:bg-[#FCE8E6] border border-[#E5E2D8] text-[#9E2A2B] text-[11px] rounded transition-colors cursor-pointer disabled:opacity-50"
                               >
                                 Cancel
                               </button>

@@ -8,12 +8,13 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vite-node tests/scheduling.test.ts --unit-test && vite-node tests/supabase-live.test.ts && vite-node tests/patient-flow-live.test.ts && vite-node tests/lifecycle-live.test.ts && vite-node tests/admin-live.test.ts",
+    "test": "vite-node tests/scheduling.test.ts --unit-test && vite-node tests/supabase-live.test.ts && vite-node tests/patient-flow-live.test.ts && vite-node tests/lifecycle-live.test.ts && vite-node tests/admin-live.test.ts && vite-node tests/hardening.test.ts",
     "test:scheduling": "vite-node tests/scheduling.test.ts --unit-test",
     "test:supabase": "vite-node tests/supabase-live.test.ts",
     "test:patient-flow": "vite-node tests/patient-flow-live.test.ts",
     "test:lifecycle": "vite-node tests/lifecycle-live.test.ts",
-    "test:admin": "vite-node tests/admin-live.test.ts"
+    "test:admin": "vite-node tests/admin-live.test.ts",
+    "test:hardening": "vite-node tests/hardening.test.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.7",

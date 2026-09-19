@@ -39,6 +39,7 @@ export function AdminSchedulesPage() {
   const [newEndTime, setNewEndTime] = useState('13:00');
   const [newDuration, setNewDuration] = useState(30);
   const [savingWindow, setSavingWindow] = useState(false);
+  const [deletingScheduleId, setDeletingScheduleId] = useState<string | null>(null);
 
   // New exception modal
   const [showAddException, setShowAddException] = useState(false);
@@ -135,18 +136,25 @@ export function AdminSchedulesPage() {
       return;
     }
 
+    if (deletingScheduleId) return;
+
     const confirm = window.confirm('Are you sure you want to remove this schedule window? The system will verify that no existing appointments or active holds depend on this window.');
     if (!confirm) return;
 
+    setDeletingScheduleId(scheduleId);
     setError(null);
     setSuccess(null);
 
-    const res = await catalogService.removeScheduleWindow(selectedDoctorId, scheduleId, true);
-    if (res.success) {
-      setSuccess('Schedule window removed successfully.');
-      loadDoctorSchedules(selectedDoctorId);
-    } else {
-      setError(res.error || 'Cannot remove schedule window due to operational conflicts.');
+    try {
+      const res = await catalogService.removeScheduleWindow(selectedDoctorId, scheduleId, true);
+      if (res.success) {
+        setSuccess('Schedule window removed successfully.');
+        loadDoctorSchedules(selectedDoctorId);
+      } else {
+        setError(res.error || 'Cannot remove schedule window due to operational conflicts.');
+      }
+    } finally {
+      setDeletingScheduleId(null);
     }
   };
 
@@ -349,7 +357,8 @@ export function AdminSchedulesPage() {
                       {userRole === 'admin' ? (
                         <button
                           onClick={() => handleRemoveWindow(sch.id)}
-                          className="p-1 text-[#9E2A2B] hover:bg-[#FCE8E6] rounded transition-colors cursor-pointer"
+                          disabled={deletingScheduleId === sch.id}
+                          className="p-1 text-[#9E2A2B] hover:bg-[#FCE8E6] rounded transition-colors cursor-pointer disabled:opacity-50"
                           title="Remove Window"
                         >
                           <Trash size={14} />

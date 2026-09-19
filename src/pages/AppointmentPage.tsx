@@ -192,6 +192,13 @@ export function AppointmentPage() {
 
   const handleHoldExpired = useCallback(() => {
     setIsHoldExpired(true);
+    setFlow((prev) => ({
+      ...prev,
+      slot: null,
+      activeHold: null,
+      currentStep: 'slot',
+      submissionError: 'Your 5-minute reservation window has expired. Please select an available consultation slot to continue.'
+    }));
   }, []);
 
   const handleBookingSubmit = async (patientDetails: PatientFormState) => {
@@ -202,7 +209,10 @@ export function AppointmentPage() {
     if (isHoldExpired) {
       setFlow((prev) => ({
         ...prev,
-        submissionError: 'Your slot hold has expired. Please select a time slot again to proceed.'
+        slot: null,
+        activeHold: null,
+        currentStep: 'slot',
+        submissionError: 'Your 5-minute reservation window has expired. Please select an available consultation slot to continue.'
       }));
       return;
     }
@@ -225,9 +235,16 @@ export function AppointmentPage() {
       });
 
       if (!result.success || !result.appointment_id) {
+        const errorText = result.error || '';
+        const isSlotStale = errorText.toLowerCase().includes('hold') ||
+                            errorText.toLowerCase().includes('slot') ||
+                            errorText.toLowerCase().includes('conflict');
         setFlow((prev) => ({
           ...prev,
           isSubmitting: false,
+          slot: isSlotStale ? null : prev.slot,
+          activeHold: isSlotStale ? null : prev.activeHold,
+          currentStep: isSlotStale ? 'slot' : prev.currentStep,
           submissionError: result.error || 'Unable to confirm appointment. Please try again or contact our scheduling desk.'
         }));
       } else {

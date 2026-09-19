@@ -60,6 +60,10 @@ export const router = createBrowserRouter([
       {
         path: 'settings',
         element: <AdminSettingsPage />
+      },
+      {
+        path: '*',
+        element: <RouteErrorView is404 />
       }
     ]
   },
