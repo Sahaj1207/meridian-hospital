@@ -5,7 +5,9 @@ import {
   Database,
   LockKey,
   Clock,
-  Info
+  Info,
+  Bell,
+  EnvelopeSimple
 } from '@phosphor-icons/react';
 import { authService } from '@/services/authService';
 import { isSupabaseConfigured } from '@/services/supabaseClient';
@@ -148,6 +150,50 @@ export function AdminSettingsPage() {
               Informational standard window. Actual appointment availability is derived authoritatively from individual doctor schedule windows and active exceptions.
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* Notification Delivery & Reminders Posture */}
+      <div className="bg-[#FAF9F6] border border-[#E5E2D8] rounded p-5 space-y-4 shadow-sm">
+        <div className="flex items-center gap-2 text-sm font-semibold text-[#111315]">
+          <Bell size={18} className="text-[#1A635E]" />
+          <span>Notification & Operations Posture</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+          <div className="p-3 rounded bg-[#F4F2EC] border border-[#E5E2D8] space-y-1">
+            <span className="text-[10px] font-mono uppercase text-[#768390] block">Active Provider</span>
+            <div className="font-semibold text-[#111315]">
+              LocalNotificationProvider
+            </div>
+            <div className="text-[10px] font-mono text-[#B07219] font-semibold">
+              Mode: Development Simulation
+            </div>
+          </div>
+
+          <div className="p-3 rounded bg-[#F4F2EC] border border-[#E5E2D8] space-y-1">
+            <span className="text-[10px] font-mono uppercase text-[#768390] block">Supported Channels</span>
+            <div className="font-semibold text-[#111315] flex items-center gap-1">
+              <EnvelopeSimple size={14} className="text-[#1A635E]" />
+              <span>Email & SMS (Multi-Channel)</span>
+            </div>
+            <div className="text-[10px] text-[#768390]">Simulated delivery with sanitized logs</div>
+          </div>
+
+          <div className="p-3 rounded bg-[#F4F2EC] border border-[#E5E2D8] space-y-1">
+            <span className="text-[10px] font-mono uppercase text-[#768390] block">Reminder Lead Window</span>
+            <div className="font-semibold text-[#111315]">
+              24 Hours in Asia/Kolkata
+            </div>
+            <div className="text-[10px] text-[#768390]">Suppresses cancelled and past slots</div>
+          </div>
+        </div>
+
+        <div className="p-3 rounded bg-[#EDF5F4] border border-[#BCD9D6] text-xs text-[#1A635E] space-y-1">
+          <div className="font-semibold">Production Scheduling Notice:</div>
+          <p className="text-[11px] text-[#14514D]">
+            Automated production dispatch requires a scheduled cron runner or Edge Function invocation. In development, reminder processing is executed through deterministic domain methods.
+          </p>
         </div>
       </div>
 

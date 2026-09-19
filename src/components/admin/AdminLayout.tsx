@@ -128,6 +128,7 @@ export function AdminLayout() {
     { to: '/admin/departments', label: 'Departments', icon: Buildings },
     { to: '/admin/schedules', label: 'Schedules', icon: Clock },
     { to: '/admin/patients', label: 'Patients', icon: Users },
+    { to: '/admin/audit', label: 'Audit Trail', icon: ShieldCheck },
     { to: '/admin/settings', label: 'Settings', icon: Gear }
   ];
 

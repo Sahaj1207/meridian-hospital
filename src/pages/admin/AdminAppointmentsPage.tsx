@@ -6,14 +6,21 @@ import {
   ArrowClockwise,
   Clock,
   Prohibit,
-  ArrowSquareOut
+  ArrowSquareOut,
+  PaperPlaneTilt,
+  EnvelopeSimple,
+  ShieldCheck,
+  Bell
 } from '@phosphor-icons/react';
 import { appointmentService } from '@/services/appointmentService';
 import { catalogService } from '@/services/catalogService';
 import { availabilityService } from '@/services/availabilityService';
+import { auditService } from '@/services/auditService';
+import { notificationService } from '@/services/notificationService';
 import { formatISTDateDisplay, formatISTTimeDisplay, getISTDateString } from '@/lib/timezone';
 import type { StaffAppointmentView, CalculatedSlot } from '@/types/scheduling';
 import type { DbAppointment } from '@/types/database';
+import type { AuditLogRecord, StoredNotificationRecord } from '@/types/notification';
 
 type AppointmentStatus = DbAppointment['status'];
 type QueueTab = 'all' | 'today' | 'upcoming' | 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
@@ -38,6 +45,63 @@ export function AdminAppointmentsPage() {
   // Modals & Drawers
   const [inspectingAppt, setInspectingAppt] = useState<StaffAppointmentView | null>(null);
   const [reschedulingAppt, setReschedulingAppt] = useState<StaffAppointmentView | null>(null);
+
+  // Inspection audit and notification history state
+  const [inspectionAuditLogs, setInspectionAuditLogs] = useState<AuditLogRecord[]>([]);
+  const [inspectionNotificationLogs, setInspectionNotificationLogs] = useState<StoredNotificationRecord[]>([]);
+  const [isResending, setIsResending] = useState(false);
+  const [resendStatus, setResendStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!inspectingAppt) {
+      setInspectionAuditLogs([]);
+      setInspectionNotificationLogs([]);
+      setResendStatus(null);
+      return;
+    }
+    let isMounted = true;
+    Promise.all([
+      auditService.getAppointmentHistory(inspectingAppt.appointment_id),
+      notificationService.getNotificationHistory(inspectingAppt.appointment_id)
+    ]).then(([audits, notifs]) => {
+      if (isMounted) {
+        setInspectionAuditLogs(audits);
+        setInspectionNotificationLogs(notifs);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [inspectingAppt]);
+
+  const handleResend = async (channel: 'email' | 'sms') => {
+    if (!inspectingAppt) return;
+    setIsResending(true);
+    setResendStatus(null);
+    try {
+      const res = await notificationService.resendNotification({
+        appointment_id: inspectingAppt.appointment_id,
+        event_type: 'appointment.confirmed',
+        channel,
+        reason: 'Administrative manual resend from appointments queue'
+      });
+      if (res.status === 'sent') {
+        setResendStatus(`Notice resent successfully via ${channel.toUpperCase()}`);
+        const [updatedNotifs, updatedAudits] = await Promise.all([
+          notificationService.getNotificationHistory(inspectingAppt.appointment_id),
+          auditService.getAppointmentHistory(inspectingAppt.appointment_id)
+        ]);
+        setInspectionNotificationLogs(updatedNotifs);
+        setInspectionAuditLogs(updatedAudits);
+      } else {
+        setResendStatus(`Resend failed: ${res.error || 'Provider delivery error'}`);
+      }
+    } catch {
+      setResendStatus('Resend dispatch failed');
+    } finally {
+      setIsResending(false);
+    }
+  };
 
   // Reschedule state
   const [rescheduleDate, setRescheduleDate] = useState('');
@@ -668,6 +732,120 @@ export function AdminAppointmentsPage() {
                   {new Date(inspectingAppt.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
                 </div>
               </div>
+            </div>
+
+            {/* Operational Lifecycle Events */}
+            <div className="space-y-2 pt-2 border-t border-[#E5E2D8]">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-[#111315]">
+                <ShieldCheck size={14} className="text-[#1A635E]" />
+                <span>Lifecycle History</span>
+              </div>
+              {inspectionAuditLogs.length === 0 ? (
+                <div className="p-2.5 rounded bg-[#F4F2EC] text-[11px] text-[#8A9096] text-center font-mono">
+                  Initial booking registered: {new Date(inspectingAppt.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                  {inspectionAuditLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="p-2 rounded bg-[#F4F2EC] border border-[#E5E2D8] flex items-center justify-between text-[11px]"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-semibold text-[#1A635E]">{log.action}</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-white text-[#555C63]">
+                          {log.actor_role}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono text-[#768390]">
+                        {new Date(log.created_at).toLocaleTimeString('en-IN', {
+                          timeZone: 'Asia/Kolkata',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Notification Delivery Records */}
+            <div className="space-y-2 pt-2 border-t border-[#E5E2D8]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-[#111315]">
+                  <Bell size={14} className="text-[#1A635E]" />
+                  <span>Notification Dispatch Status</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleResend('email')}
+                    disabled={isResending}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-[#BCD9D6] bg-[#EDF5F4] text-[#1A635E] text-[10px] font-semibold hover:bg-[#D9ECE9] transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <EnvelopeSimple size={12} />
+                    <span>Resend Email</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleResend('sms')}
+                    disabled={isResending}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-[#E5E2D8] bg-[#F4F2EC] text-[#222528] text-[10px] font-semibold hover:bg-[#EAE8E0] transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <PaperPlaneTilt size={12} />
+                    <span>Resend SMS</span>
+                  </button>
+                </div>
+              </div>
+
+              {resendStatus && (
+                <div className="p-2 text-[11px] font-mono rounded bg-[#EDF5F4] text-[#1A635E] border border-[#BCD9D6]">
+                  {resendStatus}
+                </div>
+              )}
+
+              {inspectionNotificationLogs.length === 0 ? (
+                <div className="p-2.5 rounded bg-[#F4F2EC] text-[11px] text-[#8A9096] text-center font-mono">
+                  No notifications recorded for this appointment.
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                  {inspectionNotificationLogs.map((n) => (
+                    <div
+                      key={n.id}
+                      className="p-2 rounded bg-[#F4F2EC] border border-[#E5E2D8] flex items-center justify-between text-[11px]"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono uppercase font-bold text-[#111315]">{n.channel}</span>
+                        <span className="font-mono text-[10px] text-[#555C63]">{n.event_type}</span>
+                        <span
+                          className={`px-1.5 py-0.2 rounded font-mono text-[10px] font-semibold ${
+                            n.status === 'sent'
+                              ? 'bg-[#153424] text-[#7EE787]'
+                              : n.status === 'failed'
+                              ? 'bg-[#3E1B1E] text-[#FFA198]'
+                              : n.status === 'retrying'
+                              ? 'bg-[#382806] text-[#E3B341]'
+                              : 'bg-[#EAE8E0] text-[#555C63]'
+                          }`}
+                        >
+                          {n.status.toUpperCase()}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono text-[#768390]">
+                        {n.attempt_count && n.attempt_count > 1 ? `(${n.attempt_count} tries) ` : ''}
+                        {new Date(n.sent_at || n.created_at).toLocaleTimeString('en-IN', {
+                          timeZone: 'Asia/Kolkata',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="p-3 rounded bg-[#F4F2EC] text-[11px] text-[#555C63] border border-[#E5E2D8] space-y-1">

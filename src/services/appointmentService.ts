@@ -1,16 +1,16 @@
-import type { 
-  DbAppointment, 
-  DbSlotHold, 
+import type {
+  DbAppointment,
+  DbSlotHold,
   DbPatient,
   AppointmentStatus
 } from '@/types/database';
-import type { 
-  DayAvailability, 
-  SlotHoldRequest, 
-  SlotHoldResult, 
+import type {
+  DayAvailability,
+  SlotHoldRequest,
+  SlotHoldResult,
   SlotHoldErrorCode,
-  CreateBookingRequest, 
-  BookingResult, 
+  CreateBookingRequest,
+  BookingResult,
   AppointmentFilter,
   PublicAppointmentConfirmation,
   PublicAppointmentView,
@@ -29,6 +29,7 @@ import { getSupabaseClient, isSupabaseConfigured, assertSupabaseEnvironment, isP
 import { parseISTToUTC, getISTDateString, getISTDayOfWeek, isValidCalendarDate } from '@/lib/timezone';
 import { authService } from './authService';
 import { notificationService } from './notificationService';
+import { auditService } from './auditService';
 import type { NotificationEventType } from '@/types/notification';
 
 /**
@@ -80,8 +81,8 @@ class InMemoryAppointmentStore {
   private eagerReleaseExpiredHolds(doctorId: string, now: Date): void {
     for (const hold of this.slotHolds) {
       if (
-        hold.doctor_id === doctorId && 
-        hold.status === 'active' && 
+        hold.doctor_id === doctorId &&
+        hold.status === 'active' &&
         new Date(hold.expires_at).getTime() <= now.getTime()
       ) {
         hold.status = 'released';
@@ -1071,8 +1072,8 @@ export class AppointmentService {
    * completely avoiding exposure of patient records or third-party hold tokens.
    */
   async getDoctorAvailability(
-    doctorId: string, 
-    dateStr: string, 
+    doctorId: string,
+    dateStr: string,
     customDurationMinutes?: number,
     holdToken?: string,
     currentTimeUtc?: Date
@@ -1372,6 +1373,22 @@ export class AppointmentService {
       });
 
       await notificationService.dispatchNotification(intent);
+
+      // Failure-isolated operational audit logging
+      await auditService.logEvent({
+        action: eventType,
+        resource_type: 'appointment',
+        resource_id: appt.appointment_id,
+        metadata: {
+          appointment_id: appt.appointment_id,
+          doctor_id: appt.doctor_id,
+          department_id: appt.department_id,
+          status: appt.status,
+          slot_start: appt.appointment_start,
+          slot_end: appt.appointment_end,
+          rescheduled_from: previousTimes?.start
+        }
+      });
     } catch {
       // Safety boundary: notification delivery must never corrupt or fail the appointment operation
     }
@@ -1383,7 +1400,7 @@ export class AppointmentService {
    * Prevents booking reference enumeration and contact information harvesting.
    */
   async getPublicAppointmentConfirmation(
-    appointmentId: string, 
+    appointmentId: string,
     confirmationToken: string
   ): Promise<PublicAppointmentConfirmation | null> {
     assertSupabaseEnvironment();

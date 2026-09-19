@@ -4,11 +4,18 @@ export type NotificationEventType =
   | 'appointment.cancelled'
   | 'appointment.rescheduled'
   | 'appointment.reminder'
-  | 'appointment.completed';
+  | 'appointment.completed'
+  | 'appointment.no_show';
 
 export type NotificationChannel = 'email' | 'sms';
 
-export type NotificationDeliveryStatus = 'pending' | 'sent' | 'failed' | 'skipped';
+export type NotificationDeliveryStatus =
+  | 'pending'
+  | 'sent'
+  | 'failed'
+  | 'retrying'
+  | 'skipped'
+  | 'suppressed';
 
 export interface AppointmentNotificationPayload {
   appointment_id: string; // e.g. MRD-2026-10420
@@ -53,6 +60,8 @@ export interface NotificationDeliveryResult {
   sent_at?: string;
   error?: string;
   simulated: boolean;
+  attempt_count?: number;
+  idempotency_key?: string;
 }
 
 export interface NotificationDispatchResult {
@@ -83,11 +92,15 @@ export interface NotificationProvider {
 
 export interface StoredNotificationRecord {
   id: string;
+  idempotency_key?: string;
   intent_id: string;
   appointment_id: string;
   event_type: NotificationEventType;
   channel: NotificationChannel;
   status: NotificationDeliveryStatus;
+  provider?: string;
+  attempt_count?: number;
+  last_error_code?: string;
   created_at: string;
   sent_at?: string;
   error?: string;
@@ -100,4 +113,33 @@ export interface ReminderEvaluationResult {
   lead_time_hours: number;
   scheduled_reminder_time_utc: string;
   reason?: string;
+}
+
+export type AuditActionType =
+  | 'appointment.created'
+  | 'appointment.confirmed'
+  | 'appointment.cancelled'
+  | 'appointment.rescheduled'
+  | 'appointment.completed'
+  | 'appointment.no_show'
+  | 'schedule.created'
+  | 'schedule.updated'
+  | 'schedule.blocked'
+  | 'schedule.exception_created'
+  | 'schedule.exception_removed'
+  | 'doctor.updated'
+  | 'department.updated'
+  | 'notification.sent'
+  | 'notification.failed'
+  | 'notification.retrying';
+
+export interface AuditLogRecord {
+  id: string;
+  actor_id: string | null;
+  actor_role: string;
+  action: AuditActionType | string;
+  resource_type: string;
+  resource_id: string;
+  metadata: Record<string, any>;
+  created_at: string;
 }

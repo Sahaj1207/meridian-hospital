@@ -22,6 +22,7 @@ import { AdminDepartmentsPage } from '@/pages/admin/AdminDepartmentsPage';
 import { AdminSchedulesPage } from '@/pages/admin/AdminSchedulesPage';
 import { AdminPatientsPage } from '@/pages/admin/AdminPatientsPage';
 import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage';
+import { AdminAuditPage } from '@/pages/admin/AdminAuditPage';
 
 export const router = createBrowserRouter([
   {
@@ -56,6 +57,10 @@ export const router = createBrowserRouter([
       {
         path: 'patients',
         element: <AdminPatientsPage />
+      },
+      {
+        path: 'audit',
+        element: <AdminAuditPage />
       },
       {
         path: 'settings',
