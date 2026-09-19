@@ -1564,6 +1564,42 @@ export class AppointmentService {
 
     const supabase = getSupabaseClient();
     if (isSupabaseConfigured && supabase) {
+      if (!isStaff) {
+        // Use hardened SECURITY DEFINER RPC for public patient cancellation
+        const { data: rpcData, error: rpcError } = await supabase.rpc('cancel_public_appointment', {
+          p_appointment_id: appointmentId,
+          p_confirmation_token: token || '',
+          p_cancellation_reason: typeof requestOrId === 'object' ? requestOrId.cancellation_reason : undefined
+        });
+
+        if (rpcError) {
+          return {
+            success: false,
+            error: 'Failed to cancel appointment. Please try again.',
+            error_code: 'INTERNAL_ERROR'
+          };
+        }
+
+        if (rpcData && rpcData.success) {
+          if (!rpcData.message?.includes('already cancelled')) {
+            await this.dispatchLifecycleNotification('appointment.cancelled', appointmentId);
+          }
+          return {
+            success: true,
+            appointment_id: rpcData.appointment_id || appointmentId,
+            status: 'cancelled',
+            message: rpcData.message || 'Appointment cancelled successfully.'
+          };
+        }
+
+        return {
+          success: false,
+          error: rpcData?.error || 'Appointment cancellation failed.',
+          error_code: rpcData?.error_code || 'UNAUTHORIZED_APPOINTMENT_OPERATION'
+        };
+      }
+
+      // Operational staff / admin path continues to use authenticated RLS update
       const { data: appt, error } = await supabase
         .from('appointments')
         .select('*')
@@ -1576,16 +1612,6 @@ export class AppointmentService {
           error: 'Appointment was not found.',
           error_code: 'APPOINTMENT_NOT_FOUND'
         };
-      }
-
-      if (!isStaff) {
-        if (!token || token.length < 16 || appt.confirmation_token !== token) {
-          return {
-            success: false,
-            error: 'Unauthorized: valid confirmation token required for public cancellation.',
-            error_code: 'UNAUTHORIZED_APPOINTMENT_OPERATION'
-          };
-        }
       }
 
       if (appt.status === 'completed') {
@@ -1865,6 +1891,46 @@ export class AppointmentService {
     }
 
     const isStaff = await this.isAuthorizedStaffOrAdmin(isStaffOrAdminOverride);
+
+    const supabase = getSupabaseClient();
+    if (isSupabaseConfigured && supabase && !isStaff) {
+      const { data: rpcData, error: rpcError } = await supabase.rpc('reschedule_public_appointment', {
+        p_appointment_id: request.appointment_id,
+        p_confirmation_token: request.confirmation_token || '',
+        p_new_slot_start: request.new_slot_start,
+        p_new_slot_end: request.new_slot_end,
+        p_hold_token: request.hold_token || null
+      });
+
+      if (rpcError) {
+        return {
+          success: false,
+          error: 'Failed to reschedule appointment. Please try again.',
+          error_code: 'INTERNAL_ERROR'
+        };
+      }
+
+      if (rpcData && rpcData.success) {
+        await this.dispatchLifecycleNotification('appointment.rescheduled', rpcData.new_appointment_id, {
+          start: request.new_slot_start,
+          end: request.new_slot_end
+        });
+
+        return {
+          success: true,
+          original_appointment_id: rpcData.original_appointment_id || request.appointment_id,
+          new_appointment_id: rpcData.new_appointment_id,
+          confirmation_token: rpcData.confirmation_token,
+          new_appointment: rpcData.appointment
+        };
+      }
+
+      return {
+        success: false,
+        error: rpcData?.error || 'Reschedule operation failed.',
+        error_code: rpcData?.error_code || 'UNAUTHORIZED_APPOINTMENT_OPERATION'
+      };
+    }
 
     const origAppt = localAppointmentStore.findAppointment(request.appointment_id);
     const origStart = origAppt?.appointment_start;

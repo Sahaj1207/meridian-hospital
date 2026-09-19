@@ -5,10 +5,11 @@
 
 -- 1. EXTENSIONS
 CREATE EXTENSION IF NOT EXISTS "btree_gist";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA extensions;
 
 -- 2. APPOINTMENTS CONFIRMATION TOKEN
 ALTER TABLE public.appointments 
-ADD COLUMN IF NOT EXISTS confirmation_token TEXT NOT NULL DEFAULT ('conf-' || encode(gen_random_bytes(16), 'hex'));
+ADD COLUMN IF NOT EXISTS confirmation_token TEXT NOT NULL DEFAULT ('conf-' || encode(extensions.gen_random_bytes(16), 'hex'));
 
 -- Index for secure appointment confirmation lookup
 CREATE UNIQUE INDEX IF NOT EXISTS idx_appointments_confirmation_lookup 
@@ -144,7 +145,7 @@ CREATE OR REPLACE FUNCTION public.acquire_slot_hold(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
     v_now TIMESTAMPTZ := timezone('utc'::text, now());
@@ -179,7 +180,7 @@ BEGIN
       AND expires_at <= v_now;
 
     v_expires_at := v_now + (p_duration_minutes || ' minutes')::INTERVAL;
-    v_token := 'hold-' || encode(gen_random_bytes(16), 'hex');
+    v_token := 'hold-' || encode(extensions.gen_random_bytes(16), 'hex');
 
     -- 1. Check if slot overlaps any confirmed appointment
     SELECT COUNT(*) INTO v_conflict_appt_count
@@ -233,7 +234,7 @@ CREATE OR REPLACE FUNCTION public.book_appointment(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = public, extensions, pg_temp
 AS $$
 DECLARE
     v_now TIMESTAMPTZ := timezone('utc'::text, now());
@@ -338,7 +339,7 @@ BEGIN
     -- 4. Generate unique human-readable booking reference and unguessable confirmation token
     v_seq_val := floor(10000 + random() * 90000)::INTEGER;
     v_appointment_id := 'MRD-2026-' || v_seq_val;
-    v_confirmation_token := 'conf-' || encode(gen_random_bytes(16), 'hex');
+    v_confirmation_token := 'conf-' || encode(extensions.gen_random_bytes(16), 'hex');
 
     -- 5. Insert appointment
     INSERT INTO public.appointments (
