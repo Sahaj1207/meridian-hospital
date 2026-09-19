@@ -20,7 +20,8 @@ import type {
   RescheduleAppointmentRequest,
   AppointmentOperationResult,
   RescheduleResult,
-  StaffAppointmentView
+  StaffAppointmentView,
+  StaffPatientView
 } from '@/types/scheduling';
 import { catalogService, CANONICAL_DOCTORS, CANONICAL_DEPARTMENTS } from './catalogService';
 import { calculateDoctorAvailability, isTimeIntervalOverlapping } from './availabilityEngine';
@@ -1893,7 +1894,45 @@ export class AppointmentService {
     const isStaff = await this.isAuthorizedStaffOrAdmin(isStaffOrAdminOverride);
 
     const supabase = getSupabaseClient();
-    if (isSupabaseConfigured && supabase && !isStaff) {
+    if (isSupabaseConfigured && supabase) {
+      if (isStaff) {
+        // Dedicated authenticated staff and admin operational rescheduling RPC
+        const { data: rpcData, error: rpcError } = await supabase.rpc('reschedule_staff_appointment', {
+          p_appointment_id: request.appointment_id,
+          p_new_slot_start: request.new_slot_start,
+          p_new_slot_end: request.new_slot_end,
+          p_hold_token: request.hold_token || null
+        });
+
+        if (rpcError) {
+          return {
+            success: false,
+            error: 'Failed to reschedule appointment. Please try again.',
+            error_code: 'INTERNAL_ERROR'
+          };
+        }
+
+        if (rpcData && rpcData.success) {
+          await this.dispatchLifecycleNotification('appointment.rescheduled', rpcData.new_appointment_id, {
+            start: request.new_slot_start,
+            end: request.new_slot_end
+          });
+
+          return {
+            success: true,
+            original_appointment_id: rpcData.original_appointment_id || request.appointment_id,
+            new_appointment_id: rpcData.new_appointment_id
+          };
+        }
+
+        return {
+          success: false,
+          error: rpcData?.error || 'Staff reschedule operation failed.',
+          error_code: rpcData?.error_code || 'UNAUTHORIZED_APPOINTMENT_OPERATION'
+        };
+      }
+
+      // Public patient rescheduling path using confirmation token
       const { data: rpcData, error: rpcError } = await supabase.rpc('reschedule_public_appointment', {
         p_appointment_id: request.appointment_id,
         p_confirmation_token: request.confirmation_token || '',
@@ -2037,6 +2076,120 @@ export class AppointmentService {
     }
 
     return localAppointmentStore.getStaffAppointmentById(appointmentId);
+  }
+
+  /**
+   * Retrieves operational patient directory for staff/admin views.
+   * Avoids N+1 queries by aggregating appointments in a consolidated query.
+   * Respects RLS and suppresses all confirmation tokens.
+   */
+  async getStaffPatients(
+    searchQuery?: string,
+    isStaffOrAdminOverride?: boolean
+  ): Promise<StaffPatientView[]> {
+    assertSupabaseEnvironment();
+
+    const isStaff = await this.isAuthorizedStaffOrAdmin(isStaffOrAdminOverride);
+    if (!isStaff) {
+      return [];
+    }
+
+    const supabase = getSupabaseClient();
+    if (isSupabaseConfigured && supabase) {
+      let patientQuery = supabase
+        .from('patients')
+        .select('id, full_name, phone, email, created_at')
+        .order('full_name', { ascending: true })
+        .limit(100);
+
+      const trimmedSearch = searchQuery?.trim();
+      if (trimmedSearch) {
+        patientQuery = patientQuery.or(
+          `full_name.ilike.%${trimmedSearch}%,phone.ilike.%${trimmedSearch}%,email.ilike.%${trimmedSearch}%`
+        );
+      }
+
+      const { data: patientRows, error: patErr } = await patientQuery;
+      if (patErr || !patientRows) {
+        return [];
+      }
+
+      const patientIds = patientRows.map((p: any) => p.id);
+      const apptsByPatientId: Record<string, StaffAppointmentView[]> = {};
+
+      if (patientIds.length > 0) {
+        const { data: apptRows, error: apptErr } = await supabase
+          .from('appointments')
+          .select('*, doctors(*), departments(*), patients(*)')
+          .in('patient_id', patientIds)
+          .order('appointment_start', { ascending: false });
+
+        if (!apptErr && apptRows) {
+          for (const appt of apptRows) {
+            const patId = appt.patient_id;
+            if (!apptsByPatientId[patId]) {
+              apptsByPatientId[patId] = [];
+            }
+            apptsByPatientId[patId].push({
+              id: appt.id,
+              appointment_id: appt.appointment_id,
+              doctor_id: appt.doctor_id,
+              doctor_name: appt.doctors?.name || appt.doctor_id,
+              department_id: appt.department_id,
+              department_name: appt.departments?.name || appt.department_id,
+              consultation_type: appt.consultation_type,
+              appointment_start: appt.appointment_start,
+              appointment_end: appt.appointment_end,
+              patient_name: appt.patients?.full_name || 'Anonymous Patient',
+              patient_phone: appt.patients?.phone || '',
+              patient_email: appt.patients?.email || '',
+              status: appt.status,
+              created_at: appt.created_at,
+              updated_at: appt.updated_at
+            });
+          }
+        }
+      }
+
+      return patientRows.map((p: any) => ({
+        id: p.id,
+        full_name: p.full_name,
+        phone: p.phone,
+        email: p.email,
+        created_at: p.created_at,
+        total_appointments: apptsByPatientId[p.id]?.length || 0,
+        recent_appointments: (apptsByPatientId[p.id] || []).slice(0, 5)
+      }));
+    }
+
+    // Local in-memory store fallback
+    const localPatients = localAppointmentStore.getPatients();
+    const localAppts = localAppointmentStore.getStaffAppointments();
+    const trimmed = searchQuery?.toLowerCase().trim();
+
+    return localPatients
+      .filter((p) => {
+        if (!trimmed) return true;
+        return (
+          p.full_name.toLowerCase().includes(trimmed) ||
+          p.phone.includes(trimmed) ||
+          p.email.toLowerCase().includes(trimmed)
+        );
+      })
+      .map((p) => {
+        const matchingAppts = localAppts.filter(
+          (a) => a.patient_name === p.full_name || a.patient_email === p.email
+        );
+        return {
+          id: p.id,
+          full_name: p.full_name,
+          phone: p.phone,
+          email: p.email,
+          created_at: p.created_at,
+          total_appointments: matchingAppts.length,
+          recent_appointments: matchingAppts.slice(0, 5)
+        };
+      });
   }
 
   /**

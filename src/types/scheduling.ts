@@ -136,6 +136,16 @@ export interface StaffAppointmentView {
   updated_at: string;
 }
 
+export interface StaffPatientView {
+  id: string;
+  full_name: string;
+  phone: string;
+  email: string;
+  created_at?: string;
+  total_appointments: number;
+  recent_appointments: StaffAppointmentView[];
+}
+
 export type AppointmentManagementErrorCode =
   | 'APPOINTMENT_NOT_FOUND'
   | 'INVALID_APPOINTMENT_STATUS'

@@ -11,10 +11,58 @@ import { LocationsPage } from '@/pages/LocationsPage';
 import { AppointmentPage } from '@/pages/AppointmentPage';
 import { InternationalPatientsPage } from '@/pages/InternationalPatientsPage';
 import { InsuranceBillingPage } from '@/pages/InsuranceBillingPage';
-import { AdminAnalyticsPage } from '@/pages/AdminAnalyticsPage';
 import { RouteErrorView } from '@/components/shared/RouteErrorView';
 
+import { AdminLayout } from '@/components/admin/AdminLayout';
+import { AdminAnalyticsPage } from '@/pages/AdminAnalyticsPage';
+import { AdminLoginPage } from '@/pages/admin/AdminLoginPage';
+import { AdminAppointmentsPage } from '@/pages/admin/AdminAppointmentsPage';
+import { AdminDoctorsPage } from '@/pages/admin/AdminDoctorsPage';
+import { AdminDepartmentsPage } from '@/pages/admin/AdminDepartmentsPage';
+import { AdminSchedulesPage } from '@/pages/admin/AdminSchedulesPage';
+import { AdminPatientsPage } from '@/pages/admin/AdminPatientsPage';
+import { AdminSettingsPage } from '@/pages/admin/AdminSettingsPage';
+
 export const router = createBrowserRouter([
+  {
+    path: '/admin',
+    element: <AdminLayout />,
+    errorElement: <RouteErrorView />,
+    children: [
+      {
+        index: true,
+        element: <AdminAnalyticsPage />
+      },
+      {
+        path: 'login',
+        element: <AdminLoginPage />
+      },
+      {
+        path: 'appointments',
+        element: <AdminAppointmentsPage />
+      },
+      {
+        path: 'doctors',
+        element: <AdminDoctorsPage />
+      },
+      {
+        path: 'departments',
+        element: <AdminDepartmentsPage />
+      },
+      {
+        path: 'schedules',
+        element: <AdminSchedulesPage />
+      },
+      {
+        path: 'patients',
+        element: <AdminPatientsPage />
+      },
+      {
+        path: 'settings',
+        element: <AdminSettingsPage />
+      }
+    ]
+  },
   {
     path: '/',
     element: <Layout />,
@@ -63,10 +111,6 @@ export const router = createBrowserRouter([
       {
         path: 'insurance-billing',
         element: <InsuranceBillingPage />
-      },
-      {
-        path: 'admin',
-        element: <AdminAnalyticsPage />
       },
       {
         path: '*',

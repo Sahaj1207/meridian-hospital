@@ -276,10 +276,12 @@ export const localCatalogStore = new InMemoryCatalogStore();
 function checkScheduleConflictsWithAppointments(
   doctorId: string,
   proposedWindows: DbDoctorSchedule[],
-  currentTimeUtc: Date = new Date()
+  currentTimeUtc: Date = new Date(),
+  extraAppointments?: DbAppointment[]
 ): { hasConflict: boolean; conflictingAppointment?: DbAppointment } {
-  const appointments = localAppointmentStore.getAppointments();
-  const futureDoctorAppts = appointments.filter(
+  const localAppts = localAppointmentStore.getAppointments();
+  const allAppts = extraAppointments ? [...localAppts, ...extraAppointments] : localAppts;
+  const futureDoctorAppts = allAppts.filter(
     (a) => a.doctor_id === doctorId && 
            a.status !== 'cancelled' && 
            new Date(a.appointment_start).getTime() >= currentTimeUtc.getTime()
@@ -312,10 +314,12 @@ function checkScheduleConflictsWithAppointments(
 function checkScheduleConflictsWithHolds(
   doctorId: string,
   proposedWindows: DbDoctorSchedule[],
-  currentTimeUtc: Date = new Date()
+  currentTimeUtc: Date = new Date(),
+  extraHolds?: DbSlotHold[]
 ): { hasConflict: boolean; conflictingHold?: DbSlotHold } {
-  const holds = localAppointmentStore.getSlotHolds();
-  const activeHolds = holds.filter(
+  const localHolds = localAppointmentStore.getSlotHolds();
+  const allHolds = extraHolds ? [...localHolds, ...extraHolds] : localHolds;
+  const activeHolds = allHolds.filter(
     (h) => h.doctor_id === doctorId && 
            h.status === 'active' && 
            new Date(h.expires_at).getTime() > currentTimeUtc.getTime()
@@ -353,10 +357,12 @@ function checkExceptionConflictsWithAppointments(
     end_time?: string;
     exception_type: string;
   },
-  currentTimeUtc: Date = new Date()
+  currentTimeUtc: Date = new Date(),
+  extraAppointments?: DbAppointment[]
 ): { hasConflict: boolean; conflictingAppointment?: DbAppointment } {
-  const appointments = localAppointmentStore.getAppointments();
-  const futureDoctorAppts = appointments.filter(
+  const localAppts = localAppointmentStore.getAppointments();
+  const allAppts = extraAppointments ? [...localAppts, ...extraAppointments] : localAppts;
+  const futureDoctorAppts = allAppts.filter(
     (a) => a.doctor_id === doctorId && 
            a.status !== 'cancelled' && 
            new Date(a.appointment_start).getTime() >= currentTimeUtc.getTime()
@@ -922,10 +928,17 @@ export class CatalogService {
    * Protects existing future appointments and active holds from being left uncovered.
    */
   async removeScheduleWindow(
-    scheduleId: string,
+    scheduleIdOrDoctorId: string,
+    scheduleIdOrOverride?: string | boolean,
     isStaffOrAdminOverride?: boolean
   ): Promise<DoctorScheduleOperationResult> {
-    const isStaff = await this.isAuthorizedStaffOrAdmin(isStaffOrAdminOverride);
+    let scheduleId = scheduleIdOrDoctorId;
+    const override = typeof scheduleIdOrOverride === 'boolean' ? scheduleIdOrOverride : isStaffOrAdminOverride;
+    if (typeof scheduleIdOrOverride === 'string') {
+      scheduleId = scheduleIdOrOverride;
+    }
+
+    const isStaff = await this.isAuthorizedStaffOrAdmin(override);
     if (!isStaff) {
       return {
         success: false,
@@ -934,7 +947,15 @@ export class CatalogService {
       };
     }
 
-    const existingWindow = localCatalogStore.getScheduleById(scheduleId);
+    const supabase = getSupabaseClient();
+    let existingWindow = localCatalogStore.getScheduleById(scheduleId);
+    if (!existingWindow && isSupabaseConfigured && supabase) {
+      const { data } = await supabase.from('doctor_schedules').select('*').eq('id', scheduleId).maybeSingle();
+      if (data) {
+        existingWindow = data as DbDoctorSchedule;
+      }
+    }
+
     if (!existingWindow) {
       return {
         success: false,
@@ -944,11 +965,36 @@ export class CatalogService {
     }
 
     const doctorId = existingWindow.doctor_id;
-    const allWindows = localCatalogStore.getDoctorSchedules(doctorId, true);
+    const allWindows = await this.getDoctorSchedules(doctorId, true);
     const remainingWindows = allWindows.filter((w) => w.id !== scheduleId);
 
+    let remoteAppts: DbAppointment[] | undefined;
+    let remoteHolds: DbSlotHold[] | undefined;
+
+    if (isSupabaseConfigured && supabase) {
+      const { data: apptData } = await supabase
+        .from('appointments')
+        .select('*')
+        .eq('doctor_id', doctorId)
+        .neq('status', 'cancelled')
+        .gte('appointment_start', new Date().toISOString());
+      if (apptData) {
+        remoteAppts = apptData as DbAppointment[];
+      }
+
+      const { data: holdData } = await supabase
+        .from('slot_holds')
+        .select('*')
+        .eq('doctor_id', doctorId)
+        .eq('status', 'active')
+        .gt('expires_at', new Date().toISOString());
+      if (holdData) {
+        remoteHolds = holdData as DbSlotHold[];
+      }
+    }
+
     // 1. Conflict check against future confirmed appointments
-    const apptConflict = checkScheduleConflictsWithAppointments(doctorId, remainingWindows);
+    const apptConflict = checkScheduleConflictsWithAppointments(doctorId, remainingWindows, new Date(), remoteAppts);
     if (apptConflict.hasConflict) {
       return {
         success: false,
@@ -958,7 +1004,7 @@ export class CatalogService {
     }
 
     // 2. Conflict check against active holds
-    const holdConflict = checkScheduleConflictsWithHolds(doctorId, remainingWindows);
+    const holdConflict = checkScheduleConflictsWithHolds(doctorId, remainingWindows, new Date(), remoteHolds);
     if (holdConflict.hasConflict) {
       return {
         success: false,
@@ -967,7 +1013,6 @@ export class CatalogService {
       };
     }
 
-    const supabase = getSupabaseClient();
     if (isSupabaseConfigured && supabase) {
       const { error } = await supabase.from('doctor_schedules').delete().eq('id', scheduleId);
       if (error) {
